@@ -2,13 +2,18 @@
 - 🔭 I’m currently a Data Science and Machine Learning Engineering Intern at Zectr, working on their review analysis engine
 - 🌱 I’m currently learning: **Text generation and Advanced NLP Techniques with BERT and Ernie-based Models**
 - 💬 Ask me about: ML, Feature Engineering and Sports Analytics
-- 📫 How to reach me: [Linkedin](https://www.linkedin.com/in/shail-mirpuri/) or Email (mirpurishail@gmail.com) 
+- 📫 How to reach me: [![LinkedIn][3.2]][3] (https://www.linkedin.com/in/shail-mirpuri/) or Email (mirpurishail@gmail.com) 
+- 
+
+<!-- Icons -->
+
+[2.2]: https://raw.githubusercontent.com/MartinHeinz/MartinHeinz/master/linkedin-3-16.png (LinkedIn icon without padding)
+
+<!-- Links to your social media accounts -->
+
+[2]: https://www.linkedin.com/in/shail-mirpuri/
 
 ### Github Stats
-
-[![Shails's GitHub stats](https://github-readme-stats.vercel.app/api?username=shailm99)](https://github.com/anuraghazra/github-readme-stats)
-
-[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=shailm99)](https://github.com/anuraghazra/github-readme-stats)
 
 <a href="https://github.com/anuraghazra/github-readme-stats">
   <img align="center" src="https://github-readme-stats.vercel.app/api?username=shailm99" />
