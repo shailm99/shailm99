@@ -13,6 +13,10 @@
 
 [2]: https://www.linkedin.com/in/shail-mirpuri/
 
+### Tech Stack 🛠️
+![](https://img.shields.io/badge/<OS>-<MAC>-informational?style=flat&logo=<LOGO_NAME>&logoColor=white&color=2bbc8a)
+
+
 ### Github Stats 📈
 
 <a href="https://github.com/anuraghazra/github-readme-stats">
