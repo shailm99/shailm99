@@ -26,6 +26,9 @@
 ![](https://img.shields.io/badge/Seaborn-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
 ![](https://img.shields.io/badge/Matplotlib-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
 ![](https://img.shields.io/badge/Scrapy-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
+![](https://img.shields.io/badge/NLTK-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
+![](https://img.shields.io/badge/AutoML-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
+
 
 
 ### Github Stats 📈
