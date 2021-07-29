@@ -2,7 +2,7 @@
 - 🔭 I’m currently a Data Science and Machine Learning Engineering Intern at Zectr, working on their review analysis engine
 - 🌱 I’m currently learning: **Text generation and Advanced NLP Techniques with BERT and Ernie-based Models**
 - 💬 Ask me about: ML, Feature Engineering and Sports Analytics
-- 📫 How to reach me: [![LinkedIn][3.2]][3] (https://www.linkedin.com/in/shail-mirpuri/) or Email (mirpurishail@gmail.com) 
+- 📫 How to reach me: [![LinkedIn][2.2]][2] (https://www.linkedin.com/in/shail-mirpuri/) or Email (mirpurishail@gmail.com) 
 - 
 
 <!-- Icons -->
