@@ -3,7 +3,6 @@
 - 🌱 I’m currently learning: **Text generation and Advanced NLP Techniques with BERT and Ernie-based Models**
 - 💬 Ask me about: ML, Feature Engineering and Sports Analytics
 - 📫 How to reach me: [![LinkedIn][2.2]][2] or Email (mirpurishail@gmail.com) or [my website](https://mirpurishail.wixsite.com/portfolio)
-- 
 
 <!-- Icons -->
 
