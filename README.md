@@ -14,7 +14,7 @@
 [2]: https://www.linkedin.com/in/shail-mirpuri/
 
 ### Tech Stack 🛠️
-![](https://img.shields.io/badge/OS-MAC-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
+![](https://img.shields.io/badge/Python-informational?style=flat&logo=Logo1&logoColor=white&color=2bbc8a)
 
 
 ### Github Stats 📈
