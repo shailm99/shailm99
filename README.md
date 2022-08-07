@@ -1,6 +1,6 @@
 ### Hi there I am Shail 👋
-- 🔭 I’m currently a Data Science and Machine Learning Engineering Intern at Zectr, working on their review analysis engine
-- 🌱 I’m currently learning: **Text generation and Advanced NLP Techniques with BERT and Ernie-based Models**
+- 🔭 I’m currently a Data Engineer Intern at McKinsey & Co. where I am working with a large healthcare company to architect a new big data repository  
+- 🌱 I’m currently learning: **Assessing Tech Feasibility, Business Value, Automation Opportunities for large scale, interdependent systems**
 - 💬 Ask me about: ML, Feature Engineering and Sports Analytics
 - 📫 How to reach me: [![LinkedIn][2.2]][2] or Email (mirpurishail@gmail.com) or [my website](https://mirpurishail.wixsite.com/portfolio)
 
