@@ -199,6 +199,10 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--fel
 th { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 td.num, th.num { text-align: right; }
 .confirm { background: rgba(255,156,140,.08); border: 1px solid var(--bad); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.export { display: grid; gap: 8px; border-top: 1px solid var(--felt-line); padding-top: 14px; }
+.export h3 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass-hi); }
+.export textarea { width: 100%; min-height: 120px; resize: vertical; background: var(--felt-deep); color: var(--muted); border: 1px solid var(--felt-line); border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.export .hint { font-size: 13px; color: var(--good); }
 
 @media (max-width: 520px) {
   .tracker .num { font-size: 34px; }
@@ -248,7 +252,7 @@ const N = () => state.players.length;
 const boughtOf = p => p.bought ?? state.settings.startChips;
 const nameOf = i => state.players[i].name;
 function seatOrder() { const n = N(); return Array.from({ length: n }, (_, k) => (state.dealer + 1 + k) % n); }
-function log(msg) { state.log.unshift(msg); if (state.log.length > 200) state.log.length = 200; }
+function log(msg) { state.log.unshift(msg); if (state.log.length > 2000) state.log.length = 2000; }
 function plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
 const listNames = ids => { const n = ids.map(nameOf); return n.length < 3 ? n.join(' and ') : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`; };
 
@@ -318,14 +322,19 @@ function confirmIns() {
   const ins = order.filter(i => state.sel.includes(i));
   state.ins = ins; state.sel = [];
   if (ins.length === 0) {
-    log(`${ROUNDS[state.round].label} round: nobody went in.`);
+    log(`${ROUNDS[state.round].label}: nobody went in.`);
     finish({ type: 'none', legs: [], transfers: [] });
   } else if (ins.length === 1) {
-    log(`${nameOf(ins[0])} went in alone and took a leg.`);
+    log(`${ROUNDS[state.round].label}: ${nameOf(ins[0])} went in alone and took a leg (${state.players[ins[0]].legs + 1}/${state.settings.legsToWin}).`);
     finish({ type: 'solo', legs: [ins[0]], transfers: [] });
   } else {
     state.phase = 'showdown';
   }
+}
+
+function inOutText(ins) {
+  const out = seatOrder().filter(i => !ins.includes(i));
+  return `${ROUNDS[state.round].label}: in ${listNames(ins)}; out ${out.length ? listNames(out) : 'nobody'}.`;
 }
 
 function confirmShowdown() {
@@ -334,8 +343,9 @@ function confirmShowdown() {
   const plan = planShowdown(state.ins, winners, state.worst);
   if (!plan) return;
   plan.winners = winners;
-  if (plan.type === 'tie') log(`Everyone in tied (${listNames(winners)}); each takes a leg.`);
-  else log(`${listNames(winners)} won the showdown. ${plan.transfers.map(t => `${nameOf(t.from)} → ${t.to === 'pot' ? 'pot' : nameOf(t.to)} ${t.amt}`).join(', ')}.`);
+  const who = inOutText(state.ins);
+  if (plan.type === 'tie') log(`${who} Everyone in tied (${listNames(winners)}); each takes a leg.`);
+  else log(`${who} ${listNames(winners)} won the showdown. ${plan.transfers.map(t => `${nameOf(t.from)} → ${t.to === 'pot' ? 'pot' : nameOf(t.to)} ${t.amt}`).join(', ')}.`);
   finish(plan);
 }
 
@@ -626,6 +636,7 @@ function settleModal() {
       <tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${S.chipValue > 0 ? money(r.bought * S.chipValue) : r.bought}</td><td class="num">${r.chips}</td><td class="num">${r.back}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${signed(r.net)}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${money(r.net * S.chipValue)}</td></tr>`).join('')}</tbody>
     </table></div>
     ${S.chipValue > 0 ? `<div class="transfers" style="justify-content:flex-start">${pays.length ? pays.map(p => `<span class="xfer">${esc(P[p.from].name)} pays ${esc(P[p.to].name)} <b>${money(p.c / 100)}</b></span>`).join('') : '<span class="sub">Everyone is square.</span>'}</div>` : ''}
+    ${exportHTML()}
     ${ui.confirmReset
       ? `<div class="confirm"><p>End the night? This clears every chip count and starts over at the seating screen.</p><div class="row" style="justify-content:flex-start"><button class="btn small" data-act="reset-yes">Yes, end the night</button><button class="btn ghost small" data-act="reset-no">Keep playing</button></div></div>`
       : `<div class="row" style="justify-content:flex-start"><button class="btn ghost small" data-act="reset-ask">End the night and start over</button></div>`}
@@ -655,6 +666,33 @@ function readRebuyAmt() {
   const el = document.getElementById('rebuy-amt');
   const x = el ? Math.round(parseFloat(el.value)) : ui.rebuyAmt;
   return Number.isFinite(x) ? Math.max(0, x) : 0;
+}
+
+// Plain-text record of the night: rules, standings and every logged event, oldest first.
+function exportText() {
+  const S = state.settings, P = state.players;
+  const gamesDone = state.gameNo - 1 + (state.gameOver ? 1 : 0);
+  const lines = [
+    `357 Poker game log, exported ${new Date().toLocaleString()}`,
+    `Players: ${P.length}. Hands dealt: ${state.handNo}. Games won: ${gamesDone}. Pot still on the table: ${state.pot}.`,
+    `House rules: ${houseRulesShort().join('; ')}; if nobody goes in: ${S.nobodyIn === 'redeal' ? 're-deal' : 'next round'}.`,
+    '',
+    'Standings:',
+    ...P.map(p => {
+      const net = p.chips - boughtOf(p);
+      return `- ${p.name}: bought in ${boughtOf(p)} chips (${money(boughtOf(p) * S.chipValue)}), ${plural(p.rebuys || 0, 'rebuy')}, now ${p.chips} chips, ${plural(p.legs, 'leg')} in the current game, net ${signed(net)} chips (${money(net * S.chipValue)})`;
+    }),
+    '',
+    'Hand history, oldest first:',
+    ...state.log.slice().reverse().map(l => typeof l === 'string' ? l : l.msg),
+  ];
+  return lines.join('\n');
+}
+function exportHTML() {
+  return `<div class="export"><h3>Game log</h3>
+    <p class="sub">Copy the full record of the night and paste it to Claude for stats and a recap.</p>
+    <div class="row" style="justify-content:flex-start"><button class="btn small" data-act="copy-log">Copy game log</button><span class="hint" id="copy-status" role="status"></span></div>
+    <textarea id="log-text" readonly aria-label="Game log">${esc(exportText())}</textarea></div>`;
 }
 
 function render() {
@@ -739,6 +777,16 @@ document.addEventListener('click', e => {
     case 'rules': stashSetup(); ui.modal = 'rules'; changed = false; break;
     case 'settle': ui.modal = 'settle'; ui.confirmReset = false; changed = false; break;
     case 'close': ui.modal = null; ui.confirmReset = false; changed = false; break;
+    case 'copy-log': {
+      const ta = document.getElementById('log-text');
+      const done = ok => {
+        const st = document.getElementById('copy-status');
+        if (st) st.textContent = ok ? 'Copied. Paste it into your chat with Claude.' : "Copying was blocked here, so the text is selected below. Copy it by hand.";
+        if (!ok && ta) { ta.focus(); ta.select(); }
+      };
+      try { navigator.clipboard.writeText(ta.value).then(() => done(true), () => done(false)); } catch (err) { done(false); }
+      return;
+    }
     case 'reset-ask': ui.confirmReset = true; changed = false; break;
     case 'reset-no': ui.confirmReset = false; changed = false; break;
     case 'reset-yes':

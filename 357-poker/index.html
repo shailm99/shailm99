@@ -282,6 +282,10 @@ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--fel
 th { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 td.num, th.num { text-align: right; }
 .confirm { background: rgba(255,156,140,.08); border: 1px solid var(--bad); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.export { display: grid; gap: 8px; border-top: 1px solid var(--felt-line); padding-top: 14px; }
+.export h3 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--brass-hi); }
+.export textarea { width: 100%; min-height: 120px; resize: vertical; background: var(--felt-deep); color: var(--muted); border: 1px solid var(--felt-line); border-radius: 8px; padding: 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.export .hint { font-size: 13px; color: var(--good); }
 
 @media (max-width: 520px) {
   .tracker .num { font-size: 34px; }
@@ -481,7 +485,7 @@ const boughtOf = p => p.bought ?? state.settings.startChips;
 const nameOf = i => state.players[i].name;
 // Seat order for the current deal: starting left of the dealer.
 function seatOrder() { const n = N(); return Array.from({ length: n }, (_, k) => (state.dealer + 1 + k) % n); }
-function log(msg) { state.log.unshift({ t: Date.now(), msg }); if (state.log.length > 200) state.log.length = 200; }
+function log(msg) { state.log.unshift({ t: Date.now(), msg }); if (state.log.length > 2000) state.log.length = 2000; }
 function plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
 
 function startNight(names, settings) {
@@ -545,6 +549,12 @@ function applyRebuy(i, amt) {
   log(`${p.name} rebought for ${amt} chips (${money(amt * state.settings.chipValue)}).`);
 }
 
+function inOutText(ins) {
+  const names = ids => ids.map(nameOf).join(', ');
+  const out = seatOrder().filter(i => !ins.includes(i));
+  return `${ROUNDS[state.round].label}: in ${names(ins)}; out ${out.length ? names(out) : 'nobody'}.`;
+}
+
 function payBase() { const S = state.settings; return S.payAmount === 'pot' ? state.pot : S.fixedAmount; }
 
 function resolveRound() {
@@ -555,12 +565,12 @@ function resolveRound() {
 
   if (ins.length === 0) {
     res.type = 'none';
-    log(`${rnd.label} round: nobody stayed in.`);
+    log(`${rnd.label}: nobody stayed in.`);
   } else if (ins.length === 1) {
     res.type = 'solo';
     P[ins[0]].legs++;
     res.legs = [ins[0]];
-    log(`${nameOf(ins[0])} went in alone and took a leg (${P[ins[0]].legs}/${S.legsToWin}).`);
+    log(`${rnd.label}: ${nameOf(ins[0])} went in alone and took a leg (${P[ins[0]].legs}/${S.legsToWin}).`);
   } else {
     for (const i of ins) res.evals[i] = bestHand(P[i].hand, rnd.wild, S.threeCardRuns);
     const val = i => res.evals[i].value;
@@ -571,7 +581,7 @@ function resolveRound() {
       res.type = 'tie';
       for (const i of res.winners) P[i].legs++;
       res.legs = res.winners.slice();
-      log(`Dead heat: ${res.winners.map(nameOf).join(', ')} tie with ${res.evals[top].label}; each takes a leg.`);
+      log(`${inOutText(ins)} Dead heat: ${res.winners.map(nameOf).join(', ')} tie with ${res.evals[top].label}; each takes a leg.`);
     } else {
       res.type = 'showdown';
       const base = payBase();
@@ -598,7 +608,8 @@ function resolveRound() {
         }
       }
       const pays = res.transfers.map(t => `${nameOf(t.from)} → ${t.to === 'pot' ? 'pot' : nameOf(t.to)} ${t.amt}`).join(', ');
-      log(`${res.winners.map(nameOf).join(' & ')} won the showdown with ${res.evals[top].label}. ${pays}.`);
+      const hands = ins.map(i => `${nameOf(i)} ${res.evals[i].label}`).join(', ');
+      log(`${inOutText(ins)} Hands: ${hands}. ${res.winners.map(nameOf).join(' & ')} won the showdown. ${pays}.`);
     }
   }
 
@@ -922,6 +933,7 @@ function settleModal() {
       <tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${S.chipValue > 0 ? money(r.bought * S.chipValue) : r.bought}</td><td class="num">${r.chips}</td><td class="num">${r.back}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${signed(r.net)}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${money(r.net * S.chipValue)}</td></tr>`).join('')}</tbody>
     </table></div>
     ${S.chipValue > 0 ? `<div class="transfers">${pays.length ? pays.map(p => `<span class="xfer">${esc(P[p.from].name)} pays ${esc(P[p.to].name)} <b>${money(p.c / 100)}</b></span>`).join('') : '<span class="sub">Everyone is square.</span>'}</div>` : ''}
+    ${exportHTML()}
     ${ui.confirmReset
       ? `<div class="confirm"><p>End the night? This clears every chip count and starts over at the seating screen.</p><div class="row"><button class="btn small" data-act="reset-yes">Yes, end the night</button><button class="btn ghost small" data-act="reset-no">Keep playing</button></div></div>`
       : `<div class="row"><button class="btn ghost small" data-act="reset-ask">End the night and start over</button></div>`}
@@ -951,6 +963,33 @@ function rebuyModal() {
     <div class="field" style="max-width:280px"><label for="rebuy-amt">Chips to add</label><input type="number" id="rebuy-amt" min="1" step="1" value="${amt}"><span class="hint" id="rebuy-cost">${rebuyCost(amt)}</span></div>
     <div class="row"><button class="btn" data-act="rb-confirm" id="rb-confirm" ${ok ? '' : 'disabled'}>${esc(rebuyLabel(who, amt))}</button></div>
   </div></div>`;
+}
+
+// Plain-text record of the night: rules, standings and every logged event, oldest first.
+function exportText() {
+  const S = state.settings, P = state.players;
+  const gamesDone = state.gameNo - 1 + (state.gameOver ? 1 : 0);
+  const lines = [
+    `357 Poker game log, exported ${new Date().toLocaleString()}`,
+    `Players: ${P.length}. Hands dealt: ${state.handNo}. Games won: ${gamesDone}. Pot still on the table: ${state.pot}.`,
+    `House rules: ${houseRulesShort().join('; ')}; if nobody goes in: ${S.nobodyIn === 'redeal' ? 're-deal' : 'next round'}.`,
+    '',
+    'Standings:',
+    ...P.map(p => {
+      const net = p.chips - boughtOf(p);
+      return `- ${p.name}: bought in ${boughtOf(p)} chips (${money(boughtOf(p) * S.chipValue)}), ${plural(p.rebuys || 0, 'rebuy')}, now ${p.chips} chips, ${plural(p.legs, 'leg')} in the current game, net ${signed(net)} chips (${money(net * S.chipValue)})`;
+    }),
+    '',
+    'Hand history, oldest first:',
+    ...state.log.slice().reverse().map(l => typeof l === 'string' ? l : l.msg),
+  ];
+  return lines.join('\n');
+}
+function exportHTML() {
+  return `<div class="export"><h3>Game log</h3>
+    <p class="sub">Copy the full record of the night and paste it to Claude for stats and a recap.</p>
+    <div class="row" style="justify-content:flex-start"><button class="btn small" data-act="copy-log">Copy game log</button><span class="hint" id="copy-status" role="status"></span></div>
+    <textarea id="log-text" readonly aria-label="Game log">${esc(exportText())}</textarea></div>`;
 }
 
 function render() {
@@ -1038,6 +1077,16 @@ document.addEventListener('click', e => {
       applyRebuy(ui.rebuyFor, amt); ui.modal = null; break;
     }
     case 'close': ui.modal = null; ui.confirmReset = false; changed = false; break;
+    case 'copy-log': {
+      const ta = document.getElementById('log-text');
+      const done = ok => {
+        const st = document.getElementById('copy-status');
+        if (st) st.textContent = ok ? 'Copied. Paste it into your chat with Claude.' : "Copying was blocked here, so the text is selected below. Copy it by hand.";
+        if (!ok && ta) { ta.focus(); ta.select(); }
+      };
+      try { navigator.clipboard.writeText(ta.value).then(() => done(true), () => done(false)); } catch (err) { done(false); }
+      return;
+    }
     case 'reset-ask': ui.confirmReset = true; changed = false; break;
     case 'reset-no': ui.confirmReset = false; changed = false; break;
     case 'reset-yes':
