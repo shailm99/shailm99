@@ -221,6 +221,17 @@ p { margin: 0; }
 .seat .legs i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--brass); }
 .seat .legs i.got { background: var(--brass-hi); border-color: var(--brass-hi); box-shadow: 0 0 6px rgba(242,205,127,.6); }
 .seat .net { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.seat .rb { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+.seat .nudge { grid-column: 2 / -1; justify-self: start; margin-top: 6px; }
+.seat.broke .chips { color: var(--bad); }
+.picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pick { display: grid; gap: 2px; justify-items: start; text-align: left; padding: 12px 14px; border-radius: 14px; min-width: 0; background: var(--rail); border: 2px solid var(--rail-hi); color: var(--text); }
+.pick:hover { border-color: var(--brass); }
+.pick .nm { font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick .st { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pick[aria-pressed="true"] { background: var(--brass); border-color: var(--brass-hi); color: var(--brass-ink); }
+.pick[aria-pressed="true"] .st { color: var(--brass-ink); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
 .pos { color: var(--good); } .neg { color: var(--bad); } .zero { color: var(--muted); }
 .status { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-left: 6px; }
 .status.in { color: var(--brass-hi); }
@@ -465,6 +476,8 @@ function freshDeck() {
   return d;
 }
 const N = () => state.players.length;
+// Total chips a player has bought, buy-in plus rebuys. Older saves only had the buy-in.
+const boughtOf = p => p.bought ?? state.settings.startChips;
 const nameOf = i => state.players[i].name;
 // Seat order for the current deal: starting left of the dealer.
 function seatOrder() { const n = N(); return Array.from({ length: n }, (_, k) => (state.dealer + 1 + k) % n); }
@@ -474,7 +487,7 @@ function plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
 function startNight(names, settings) {
   state = {
     v: 1, settings, phase: 'declare',
-    players: names.map(name => ({ name, chips: settings.startChips, legs: 0, hand: [], decl: null, fresh: 0 })),
+    players: names.map(name => ({ name, chips: settings.startChips, legs: 0, hand: [], decl: null, fresh: 0, bought: settings.startChips, rebuys: 0 })),
     dealer: names.length - 1, round: 0, pot: 0, deck: [], declare: null, result: null,
     gameNo: 1, handNo: 0, gameOver: false, log: [],
   };
@@ -522,6 +535,14 @@ function undoChoice() {
   state.players[currentDeclarer()].decl = null;
   state.declare.peeking = true;
   state.declare.canUndo = state.declare.pos > 0;
+}
+
+function applyRebuy(i, amt) {
+  const p = state.players[i];
+  p.bought = boughtOf(p) + amt;
+  p.chips += amt;
+  p.rebuys = (p.rebuys || 0) + 1;
+  log(`${p.name} rebought for ${amt} chips (${money(amt * state.settings.chipValue)}).`);
 }
 
 function payBase() { const S = state.settings; return S.payAmount === 'pot' ? state.pot : S.fixedAmount; }
@@ -665,7 +686,7 @@ function barHTML() {
       ${playing ? `<div class="pot" aria-label="Pot ${state.pot} chips"><div class="stack">${'<i></i>'.repeat(potChips)}</div><div><div class="k">Pot</div><div class="v">${state.pot}</div></div></div>` : ''}
       <nav class="menu">
         <button class="btn ghost small" data-act="rules">Rules</button>
-        ${playing ? `<button class="btn ghost small" data-act="settle">Settle up</button>` : ''}
+        ${playing ? `<button class="btn ghost small" data-act="rebuy">Rebuy</button><button class="btn ghost small" data-act="settle">Settle up</button>` : ''}
       </nav>
     </div>
   </header>`;
@@ -681,13 +702,15 @@ function seatsHTML() {
     } else if (state.phase === 'reveal') {
       status = p.decl ? '<span class="status in">in</span>' : '<span class="status">out</span>';
     }
-    const net = p.chips - S.startChips;
-    return `<div class="seat ${i === cur ? 'active' : ''}">
+    const net = p.chips - boughtOf(p), broke = p.chips <= 0;
+    return `<div class="seat ${i === cur ? 'active' : ''} ${broke ? 'broke' : ''}">
       <span class="dealer ${i === state.dealer ? 'on' : ''}" title="${i === state.dealer ? 'Dealer' : ''}">D</span>
       <span class="nm">${esc(p.name)}${status}</span>
       <span class="chips">${p.chips}</span>
       <span class="legs" aria-label="${p.legs} of ${S.legsToWin} legs">${legsHTML(p.legs, S.legsToWin)}</span>
       <span class="net ${net > 0 ? 'pos' : net < 0 ? 'neg' : 'zero'}">${signed(net)} · ${money(net * S.chipValue)}</span>
+      ${p.rebuys ? `<span class="rb">${plural(p.rebuys, 'rebuy')} · in for ${boughtOf(p)} chips (${money(boughtOf(p) * S.chipValue)})</span>` : ''}
+      ${broke ? `<button class="btn small nudge" data-act="rebuy" data-i="${i}">Out of chips: rebuy</button>` : ''}
     </div>`;
   }).join('');
   return `<aside class="seats" aria-label="Players">
@@ -702,7 +725,8 @@ function houseRulesShort() {
   const S = state.settings;
   const amt = S.payAmount === 'pot' ? 'the pot amount' : `${S.fixedAmount} chips`;
   return [
-    `Ante ${S.ante} · ${S.legsToWin} legs wins · chip = ${money(S.chipValue)}`,
+    `Buy-in ${S.startChips} chips (${money(S.startChips * S.chipValue)}) · chip = ${money(S.chipValue)}`,
+    `Ante ${S.ante} · ${S.legsToWin} legs wins the pot`,
     `${S.whoPays === 'all' ? 'Each loser' : 'Worst hand'} pays ${amt} ${S.payTo === 'pot' ? 'into the pot' : 'to the winner'}`,
     `3-card straights & flushes: ${S.threeCardRuns ? 'count' : "don't count"}`,
   ];
@@ -817,7 +841,7 @@ function setupHTML() {
       </div>
       <h3>Chips</h3>
       <div class="fields">
-        <div class="field"><label for="startChips">Starting chips</label><input type="number" id="startChips" min="1" step="1" value="${S.startChips}"></div>
+        <div class="field"><label for="startChips">Buy-in (chips)</label><input type="number" id="startChips" min="1" step="1" value="${S.startChips}"><span class="hint" id="buyin-hint">${buyinHint(S.startChips, S.chipValue)}</span></div>
         <div class="field"><label for="ante">Ante per hand</label><input type="number" id="ante" min="0" step="1" value="${S.ante}"><span class="hint">Everyone pays this into the pot before each 3-card deal.</span></div>
         <div class="field"><label for="chipValue">Each chip is worth ($)</label><input type="number" id="chipValue" min="0" step="0.05" value="${S.chipValue}"><span class="hint">Only used for the settle-up math. Set 0 to play for fun.</span></div>
       </div>
@@ -838,6 +862,10 @@ function setupHTML() {
   </div>`;
 }
 
+function buyinHint(chips, value) {
+  return value > 0 ? `Each player buys in for ${money(chips * value)}. Rebuys default to this.` : 'Rebuys default to this amount.';
+}
+
 function rulesBody() {
   return `<h2>How 3-5-7 works</h2>
     <ol>
@@ -853,7 +881,8 @@ function rulesBody() {
       <div><b>3-card round</b><ol><li>Three of a kind</li><li>Pair</li><li>High card</li></ol></div>
       <div><b>5 and 7-card rounds</b><ol><li>Five of a kind</li><li>Straight flush</li><li>Four of a kind</li><li>Full house</li><li>Flush</li><li>Straight</li><li>Three of a kind</li><li>Two pair</li><li>Pair</li><li>High card</li></ol></div>
     </div>
-    <p class="sub">A wild card can be any card, even one you already hold. Aces play high or low in straights. If everyone who stayed in ties, each of them takes a leg.</p>`;
+    <p class="sub">A wild card can be any card, even one you already hold. Aces play high or low in straights. If everyone who stayed in ties, each of them takes a leg.</p>
+    <p class="sub">Busted? <strong>Rebuy</strong> in the top bar adds chips, and Settle up counts the extra money you put in.</p>`;
 }
 
 function rulesModal() {
@@ -869,8 +898,8 @@ function settleModal() {
   const n = P.length, potShare = Math.floor(state.pot / n), potRem = state.pot % n;
   const rows = P.map((p, i) => {
     const back = potShare + (i < potRem ? 1 : 0);
-    const net = p.chips + back - S.startChips;
-    return { name: p.name, chips: p.chips, back, net };
+    const net = p.chips + back - boughtOf(p);
+    return { name: p.name, bought: boughtOf(p), chips: p.chips, back, net };
   });
   // Greedy settle: biggest debtor pays biggest creditor until everyone is square.
   const cents = rows.map(r => Math.round(r.net * S.chipValue * 100));
@@ -889,13 +918,38 @@ function settleModal() {
     <div class="sheet-head"><h2>Settle up</h2><button class="btn ghost small" data-act="close">Back to the game</button></div>
     <p class="sub">If you stopped right now. ${state.pot ? `The ${state.pot}-chip pot hasn't been won yet, so it's split evenly back to everyone.` : 'The pot is empty.'}</p>
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Player</th><th class="num">Chips</th><th class="num">Pot share</th><th class="num">Net chips</th><th class="num">Net $</th></tr></thead>
-      <tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.chips}</td><td class="num">${r.back}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${signed(r.net)}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${money(r.net * S.chipValue)}</td></tr>`).join('')}</tbody>
+      <thead><tr><th>Player</th><th class="num">${S.chipValue > 0 ? 'Paid in' : 'Bought in'}</th><th class="num">Chips</th><th class="num">Pot share</th><th class="num">Net chips</th><th class="num">Net $</th></tr></thead>
+      <tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${S.chipValue > 0 ? money(r.bought * S.chipValue) : r.bought}</td><td class="num">${r.chips}</td><td class="num">${r.back}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${signed(r.net)}</td><td class="num ${r.net > 0 ? 'pos' : r.net < 0 ? 'neg' : 'zero'}">${money(r.net * S.chipValue)}</td></tr>`).join('')}</tbody>
     </table></div>
     ${S.chipValue > 0 ? `<div class="transfers">${pays.length ? pays.map(p => `<span class="xfer">${esc(P[p.from].name)} pays ${esc(P[p.to].name)} <b>${money(p.c / 100)}</b></span>`).join('') : '<span class="sub">Everyone is square.</span>'}</div>` : ''}
     ${ui.confirmReset
       ? `<div class="confirm"><p>End the night? This clears every chip count and starts over at the seating screen.</p><div class="row"><button class="btn small" data-act="reset-yes">Yes, end the night</button><button class="btn ghost small" data-act="reset-no">Keep playing</button></div></div>`
       : `<div class="row"><button class="btn ghost small" data-act="reset-ask">End the night and start over</button></div>`}
+  </div></div>`;
+}
+
+function rebuyCost(amt) {
+  const v = state.settings.chipValue;
+  return v > 0 ? `That's ${money(amt * v)} at ${money(v)} a chip.` : 'Playing for fun, so no money changes hands.';
+}
+function rebuyLabel(who, amt) {
+  if (who === null) return 'Pick a player';
+  if (!(amt > 0)) return 'Enter how many chips';
+  return `Add ${amt} chips to ${nameOf(who)}`;
+}
+function readRebuyAmt() {
+  const el = document.getElementById('rebuy-amt');
+  const x = el ? Math.round(parseFloat(el.value)) : ui.rebuyAmt;
+  return Number.isFinite(x) ? Math.max(0, x) : 0;
+}
+function rebuyModal() {
+  const who = ui.rebuyFor, amt = ui.rebuyAmt, ok = who !== null && amt > 0;
+  return `<div class="modal" role="dialog" aria-modal="true" aria-label="Rebuy"><div class="sheet">
+    <div class="sheet-head"><h2>Rebuy</h2><button class="btn ghost small" data-act="close">Cancel</button></div>
+    <p class="sub">Who's buying more chips?</p>
+    <div class="picks">${state.players.map((p, i) => `<button class="pick" data-act="rb-pick" data-i="${i}" aria-pressed="${who === i}"><span class="nm">${esc(p.name)}</span><span class="st">${p.chips} chips${p.rebuys ? ' · ' + plural(p.rebuys, 'rebuy') : ''}</span></button>`).join('')}</div>
+    <div class="field" style="max-width:280px"><label for="rebuy-amt">Chips to add</label><input type="number" id="rebuy-amt" min="1" step="1" value="${amt}"><span class="hint" id="rebuy-cost">${rebuyCost(amt)}</span></div>
+    <div class="row"><button class="btn" data-act="rb-confirm" id="rb-confirm" ${ok ? '' : 'disabled'}>${esc(rebuyLabel(who, amt))}</button></div>
   </div></div>`;
 }
 
@@ -906,7 +960,9 @@ function render() {
     const stage = state.phase === 'declare' ? stageDeclare() : stageReveal();
     app.innerHTML = `${barHTML()}<div class="main">${stage}${seatsHTML()}</div>`;
   }
-  modalRoot.innerHTML = ui.modal === 'rules' ? rulesModal() : ui.modal === 'settle' && state ? settleModal() : '';
+  modalRoot.innerHTML = ui.modal === 'rules' ? rulesModal()
+    : ui.modal === 'settle' && state ? settleModal()
+    : ui.modal === 'rebuy' && state ? rebuyModal() : '';
 }
 
 /* =================== Setup form =================== */
@@ -941,6 +997,20 @@ document.addEventListener('submit', e => {
   startNight(filled, settings);
   save(); render(); window.scrollTo(0, 0);
 });
+document.addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'startChips' || id === 'chipValue') {
+    const h = document.getElementById('buyin-hint');
+    const c = parseFloat(document.getElementById('startChips').value) || 0, v = parseFloat(document.getElementById('chipValue').value) || 0;
+    if (h) h.textContent = buyinHint(Math.round(c), Math.round(v * 100) / 100);
+  } else if (id === 'rebuy-amt') {
+    ui.rebuyAmt = readRebuyAmt();
+    document.getElementById('rebuy-cost').textContent = rebuyCost(ui.rebuyAmt);
+    const b = document.getElementById('rb-confirm');
+    b.disabled = !(ui.rebuyFor !== null && ui.rebuyAmt > 0);
+    b.textContent = rebuyLabel(ui.rebuyFor, ui.rebuyAmt);
+  }
+});
 document.addEventListener('change', e => {
   if (e.target.id === 'payAmount') { const w = document.getElementById('fixed-wrap'); if (w) w.hidden = e.target.value !== 'fixed'; }
 });
@@ -952,13 +1022,21 @@ document.addEventListener('click', e => {
     if (e.target.classList && e.target.classList.contains('modal')) { ui.modal = null; ui.confirmReset = false; render(); }
     return;
   }
-  const act = el.dataset.act;
+  if (el.disabled) return;
+  const act = el.dataset.act, i = el.dataset.i !== undefined ? +el.dataset.i : null;
   let changed = true, top = false;
   switch (act) {
     case 'add-player': stashSetup(); if (ui.setupNames.length < 7) ui.setupNames.push(`Player ${ui.setupNames.length + 1}`); changed = false; break;
     case 'rm-player': stashSetup(); ui.setupNames.splice(+el.dataset.k, 1); changed = false; break;
     case 'rules': stashSetup(); ui.modal = 'rules'; changed = false; break;
     case 'settle': ui.modal = 'settle'; ui.confirmReset = false; changed = false; break;
+    case 'rebuy': ui.modal = 'rebuy'; ui.rebuyFor = i; ui.rebuyAmt = state.settings.startChips; changed = false; break;
+    case 'rb-pick': ui.rebuyAmt = readRebuyAmt(); ui.rebuyFor = i; changed = false; break;
+    case 'rb-confirm': {
+      const amt = readRebuyAmt();
+      if (ui.rebuyFor === null || !(amt > 0)) { changed = false; break; }
+      applyRebuy(ui.rebuyFor, amt); ui.modal = null; break;
+    }
     case 'close': ui.modal = null; ui.confirmReset = false; changed = false; break;
     case 'reset-ask': ui.confirmReset = true; changed = false; break;
     case 'reset-no': ui.confirmReset = false; changed = false; break;
